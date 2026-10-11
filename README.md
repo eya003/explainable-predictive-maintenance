@@ -110,51 +110,6 @@ Prédiction : Panne / Pas de panne
 
 Le dashboard peut également entraîner les cinq modèles directement dans la session Streamlit afin de comparer leurs performances.
 
-## Captures
-
-### Accueil
-
-![Accueil](screenshots/01_home.png)
-
-### Données
-
-![Données](screenshots/02_data.png)
-
-### Exploration
-
-![Exploration](screenshots/03_exploration.png)
-
-### Préparation
-
-![Préparation](screenshots/04_preparation.png)
-
-### Modélisation
-
-![Modélisation](screenshots/05_modeling_complete.png)
-
-### Comparaison des modèles
-
-![Comparaison](screenshots/06_comparison_table.png)
-
-### Courbes ROC et précision-rappel
-
-![ROC et PR](screenshots/07_roc_pr_curves.png)
-
-### Matrices de confusion
-
-![Matrices de confusion](screenshots/08_confusion_matrices.png)
-
-### Évaluation du seuil
-
-![Évaluation](screenshots/09_evaluation_threshold.png)
-
-### Prédiction via l'API
-
-![Prédiction](screenshots/10_prediction_api.png)
-
-### Documentation FastAPI
-
-![FastAPI](screenshots/12_fastapi_docs_final.png)
 
 ## Structure du projet
 
