@@ -89,6 +89,21 @@ Le dashboard Streamlit permet de :
 - effectuer une prédiction sur une nouvelle machine ;
 - utiliser le modèle XGBoost de référence à travers l'API FastAPI.
 
+## Explainable AI
+
+La page **Explainable AI** explique le comportement du XGBoost de référence sans modifier le
+modèle ni son seuil recommandé de 0,75. Les calculs reposent toujours sur le pipeline existant :
+
+- explications globales : importance native XGBoost, permutation importance évaluée avec
+  Average Precision, importance SHAP moyenne, beeswarm et graphique de dépendance ;
+- explications locales : SHAP Waterfall et LIME pour la même machine, sélectionnée dans le jeu
+  de test ou saisie manuellement ;
+- comparaison des cinq facteurs principaux SHAP/LIME et synthèse automatique en français.
+
+Les noms après `ColumnTransformer` et `OneHotEncoder` sont récupérés automatiquement. Les
+calculs globaux utilisent au maximum 300 observations de test et sont mis en cache. Ces
+explications décrivent la décision du modèle et n'établissent pas de causalité physique.
+
 ## Architecture
 
 ```text
@@ -130,6 +145,7 @@ explainable-predictive-maintenance/
 |   |-- api_client.py
 |   |-- data_service.py
 |   |-- evaluation_service.py
+|   |-- interpretation_service.py
 |   `-- training_service.py
 |
 |-- utils/
@@ -186,6 +202,8 @@ Endpoints disponibles :
 GET  /
 GET  /health
 POST /predict
+POST /interpret
+GET  /interpret/global
 ```
 
 ## Lancer Streamlit
@@ -222,7 +240,7 @@ Les tests vérifient notamment :
 - l'entraînement des modèles ;
 - `predict` et `predict_proba` ;
 - le calcul des métriques ;
-- les endpoints `/health` et `/predict`.
+- les endpoints `/health`, `/predict` et `/interpret`.
 
 ## Déploiement
 
@@ -250,4 +268,4 @@ Des améliorations futures peuvent inclure :
 
 ## Technologies
 
-`Python` · `Pandas` · `NumPy` · `scikit-learn` · `XGBoost` · `FastAPI` · `Uvicorn` · `Streamlit` · `Plotly` · `Matplotlib` · `ucimlrepo`
+`Python` · `Pandas` · `NumPy` · `scikit-learn` · `XGBoost` · `SHAP` · `LIME` · `FastAPI` · `Uvicorn` · `Streamlit` · `Plotly` · `Matplotlib` · `ucimlrepo`

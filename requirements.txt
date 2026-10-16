@@ -12,3 +12,6 @@ ucimlrepo>=0.0.7,<1
 pydantic>=2.6,<3
 pytest>=8,<10
 httpx2>=2,<3
+shap>=0.46,<1
+lime>=0.2.0.1,<1
+matplotlib>=3.8,<4

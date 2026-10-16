@@ -85,3 +85,96 @@ def precision_recall_curves_figure(results: dict[str, dict]) -> go.Figure:
         yaxis_title="Précision", height=480,
     )
     return figure
+
+
+def importance_bar_figure(
+    data: pd.DataFrame,
+    value_column: str,
+    title: str,
+    error_column: str | None = None,
+) -> go.Figure:
+    figure = px.bar(
+        data.sort_values(value_column),
+        x=value_column,
+        y="feature",
+        error_x=error_column,
+        orientation="h",
+        title=title,
+        color=value_column,
+        color_continuous_scale="Blues",
+    )
+    figure.update_layout(coloraxis_showscale=False, yaxis_title="Variable", height=430)
+    return figure
+
+
+def lime_contribution_figure(data: pd.DataFrame) -> go.Figure:
+    frame = data.head(10).sort_values("lime_weight").copy()
+    frame["Sens"] = np.where(
+        frame["lime_weight"] >= 0, "Augmente le score", "Réduit le score"
+    )
+    figure = px.bar(
+        frame,
+        x="lime_weight",
+        y="condition_or_feature",
+        color="Sens",
+        orientation="h",
+        color_discrete_map={"Augmente le score": "#c84b4b", "Réduit le score": "#315b7d"},
+        title="Contributions locales LIME",
+    )
+    figure.update_layout(xaxis_title="Contribution LIME", yaxis_title="Condition")
+    return figure
+
+
+def shap_beeswarm_figure(values: np.ndarray, data: np.ndarray, names: list[str]):
+    import matplotlib.pyplot as plt
+    import shap
+
+    explanation = shap.Explanation(values=values, data=data, feature_names=names)
+    plt.figure()
+    shap.plots.beeswarm(explanation, max_display=15, show=False)
+    return plt.gcf()
+
+
+def shap_waterfall_figure(
+    values: np.ndarray,
+    base_value: float,
+    data: np.ndarray,
+    names: list[str],
+):
+    import matplotlib.pyplot as plt
+    import shap
+
+    explanation = shap.Explanation(
+        values=values, base_values=base_value, data=data, feature_names=names
+    )
+    plt.figure()
+    shap.plots.waterfall(explanation, max_display=15, show=False)
+    return plt.gcf()
+
+
+def shap_dependence_figure(
+    x_values: np.ndarray,
+    shap_values: np.ndarray,
+    feature_name: str,
+    color_values: np.ndarray | None = None,
+    color_name: str | None = None,
+) -> go.Figure:
+    """Dépendance SHAP avec axes exprimés dans les unités physiques brutes."""
+    frame = pd.DataFrame({feature_name: x_values, "Valeur SHAP": shap_values})
+    color_column = None
+    hover_data = {feature_name: True, "Valeur SHAP": ":.4f"}
+    if color_values is not None and color_name:
+        frame[color_name] = color_values
+        color_column = color_name
+        hover_data[color_name] = True
+    figure = px.scatter(
+        frame,
+        x=feature_name,
+        y="Valeur SHAP",
+        color=color_column,
+        color_continuous_scale="RdBu_r",
+        title=f"Dépendance SHAP — {feature_name}",
+        hover_data=hover_data,
+    )
+    figure.update_layout(height=470)
+    return figure

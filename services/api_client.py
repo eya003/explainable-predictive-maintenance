@@ -48,3 +48,53 @@ def request_prediction(
         raise APIClientError("Une erreur est survenue pendant l'appel à l'API.") from exc
     except ValueError as exc:
         raise APIClientError("La réponse de l'API est invalide.") from exc
+
+
+def _xai_request(
+    method: str,
+    url: str,
+    payload: dict[str, Any] | None = None,
+    timeout: float = 120.0,
+) -> dict[str, Any]:
+    try:
+        response = requests.request(method, url, json=payload, timeout=timeout)
+        if response.status_code == 422:
+            raise APIClientError("Les mesures saisies ne sont pas valides.")
+        if response.status_code in {500, 503}:
+            detail = response.json().get("detail", "Le module d'interprétation est indisponible.")
+            raise APIClientError(str(detail))
+        response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict):
+            raise APIClientError("La réponse d'interprétation est invalide.")
+        return result
+    except APIClientError:
+        raise
+    except requests.ConnectionError as exc:
+        raise APIClientError(
+            "FastAPI n'est pas joignable. Démarrez-la avec : uvicorn main:app --reload"
+        ) from exc
+    except requests.Timeout as exc:
+        raise APIClientError(
+            "Le calcul d'interprétation a dépassé le délai autorisé. Réessayez."
+        ) from exc
+    except requests.RequestException as exc:
+        raise APIClientError("L'appel au service d'interprétation a échoué.") from exc
+    except ValueError as exc:
+        raise APIClientError("La réponse d'interprétation est invalide.") from exc
+
+
+def request_interpretation(
+    base_url: str, payload: dict[str, Any], timeout: float = 120.0
+) -> dict[str, Any]:
+    return _xai_request(
+        "POST", f"{base_url.rstrip('/')}/interpret", payload=payload, timeout=timeout
+    )
+
+
+def request_global_interpretation(
+    base_url: str, timeout: float = 180.0
+) -> dict[str, Any]:
+    return _xai_request(
+        "GET", f"{base_url.rstrip('/')}/interpret/global", timeout=timeout
+    )

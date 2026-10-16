@@ -65,6 +65,118 @@ def recommended_params_for_training(
     return params
 
 
+def automatic_scale_pos_weight(y_train: pd.Series) -> float:
+    """Calcule le ratio négatifs/positifs sur le seul jeu d'apprentissage."""
+    counts = y_train.value_counts()
+    positive_count = int(counts.get(1, 0))
+    if positive_count == 0:
+        raise ValueError("Le jeu d'apprentissage ne contient aucune panne.")
+    return float(counts.get(0, 0) / positive_count)
+
+
+def validate_model_params(model_name: str, params: dict[str, Any]) -> None:
+    """Valide les hyperparamètres exposés dans l'interface avant l'entraînement."""
+    def positive(key: str) -> None:
+        if float(params[key]) <= 0:
+            raise ValueError(f"{key} doit être strictement positif.")
+
+    if model_name == "Logistic Regression":
+        positive("C")
+        if params.get("solver") not in {"lbfgs", "liblinear", "saga"}:
+            raise ValueError("Solver de régression logistique non pris en charge.")
+        if int(params.get("max_iter", 2000)) < 1:
+            raise ValueError("max_iter doit être supérieur ou égal à 1.")
+        if params.get("class_weight") not in {"balanced", None}:
+            raise ValueError("class_weight doit être 'balanced' ou None.")
+    elif model_name == "Decision Tree":
+        if params.get("max_depth") is not None and int(params["max_depth"]) < 1:
+            raise ValueError("max_depth doit être None ou supérieur ou égal à 1.")
+        if int(params.get("min_samples_split", 0)) < 2:
+            raise ValueError("min_samples_split doit être supérieur ou égal à 2.")
+        if int(params.get("min_samples_leaf", 0)) < 1:
+            raise ValueError("min_samples_leaf doit être supérieur ou égal à 1.")
+        if params.get("criterion", "gini") not in {"gini", "entropy", "log_loss"}:
+            raise ValueError("Critère d'arbre non pris en charge.")
+        if params.get("class_weight") not in {"balanced", None}:
+            raise ValueError("class_weight doit être 'balanced' ou None.")
+    elif model_name == "KNN":
+        if int(params.get("n_neighbors", 0)) < 1:
+            raise ValueError("n_neighbors doit être supérieur ou égal à 1.")
+        if params.get("weights") not in {"uniform", "distance"}:
+            raise ValueError("weights doit être 'uniform' ou 'distance'.")
+        if int(params.get("p", 0)) not in {1, 2}:
+            raise ValueError("p doit valoir 1 ou 2.")
+    elif model_name == "Random Forest":
+        if int(params.get("n_estimators", 0)) < 1:
+            raise ValueError("n_estimators doit être supérieur ou égal à 1.")
+        if params.get("max_depth") is not None and int(params["max_depth"]) < 1:
+            raise ValueError("max_depth doit être None ou supérieur ou égal à 1.")
+        if int(params.get("min_samples_split", 0)) < 2:
+            raise ValueError("min_samples_split doit être supérieur ou égal à 2.")
+        if int(params.get("min_samples_leaf", 0)) < 1:
+            raise ValueError("min_samples_leaf doit être supérieur ou égal à 1.")
+        if params.get("max_features") not in {"sqrt", "log2", None}:
+            raise ValueError("max_features doit être 'sqrt', 'log2' ou None.")
+        if params.get("criterion", "gini") not in {"gini", "entropy", "log_loss"}:
+            raise ValueError("Critère de forêt non pris en charge.")
+        if params.get("class_weight") not in {"balanced", None}:
+            raise ValueError("class_weight doit être 'balanced' ou None.")
+    elif model_name == "XGBoost":
+        if int(params.get("n_estimators", 0)) < 1:
+            raise ValueError("n_estimators doit être supérieur ou égal à 1.")
+        if int(params.get("max_depth", -1)) < 0:
+            raise ValueError("max_depth doit être supérieur ou égal à 0.")
+        positive("learning_rate")
+        for key in ("subsample", "colsample_bytree"):
+            value = float(params.get(key, 1.0))
+            if not 0 < value <= 1:
+                raise ValueError(f"{key} doit être compris entre 0 exclu et 1 inclus.")
+        positive("scale_pos_weight")
+    else:
+        raise ValueError(f"Modèle inconnu : {model_name}")
+
+
+def resolve_training_params(
+    model_name: str, params: dict[str, Any], y_train: pd.Series
+) -> dict[str, Any]:
+    """Résout les valeurs automatiques puis valide une configuration utilisateur."""
+    resolved = params.copy()
+    if model_name == "XGBoost" and resolved.get("scale_pos_weight") in {
+        "automatic", "calculé sur le train"
+    }:
+        resolved["scale_pos_weight"] = automatic_scale_pos_weight(y_train)
+    validate_model_params(model_name, resolved)
+    return resolved
+
+
+def build_session_model_record(
+    *, model_name: str, pipeline: Pipeline, params: dict[str, Any], metrics: dict[str, Any],
+    features: list[str], test_size: float, x_test: pd.DataFrame, y_test: pd.Series,
+    configuration: tuple[Any, ...], trained_at: str,
+    target_column: str = "Machine failure", threshold: float = 0.50,
+) -> dict[str, Any]:
+    """Construit les métadonnées communes consommées par les autres pages."""
+    return {
+        "model_name": model_name,
+        "pipeline": pipeline,
+        "metrics": metrics,
+        "params": params.copy(),
+        "threshold": float(threshold),
+        "features": features.copy(),
+        "test_size": float(test_size),
+        "x_test": x_test,
+        "y_test": y_test,
+        "trained_at": trained_at,
+        "configuration": configuration,
+        "train_test_configuration": {
+            "features": features.copy(),
+            "target_column": target_column,
+            "test_size": float(test_size),
+            "random_state": 42,
+        },
+    }
+
+
 def split_dataset(
     data: pd.DataFrame,
     feature_columns: list[str],
@@ -104,7 +216,7 @@ def build_pipeline(
 ) -> Pipeline:
     """Construit un pipeline complet pour empêcher toute fuite de données."""
     if model_name == "Logistic Regression":
-        estimator = LogisticRegression(max_iter=2000, random_state=42, **params)
+        estimator = LogisticRegression(random_state=42, **{"max_iter": 2000, **params})
         scale_numeric = True
     elif model_name == "Decision Tree":
         estimator = DecisionTreeClassifier(random_state=42, **params)
@@ -141,6 +253,7 @@ def train_model(
     x_train: pd.DataFrame,
     y_train: pd.Series,
 ) -> Pipeline:
+    validate_model_params(model_name, params)
     pipeline = build_pipeline(model_name, params, feature_columns)
     pipeline.fit(x_train, y_train)
     return pipeline
